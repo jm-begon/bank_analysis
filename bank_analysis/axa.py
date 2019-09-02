@@ -2,11 +2,10 @@ import os
 import warnings
 from abc import ABCMeta
 from collections import namedtuple
-from functools import partial
 
 import re
 
-from .base import Operation, Bank, Account, Historic
+from .base import Operation, Bank, Account, Historic, Entity
 
 
 class AxaBank(Bank):
@@ -34,7 +33,7 @@ class NotAccountOp(AxaOp, metaclass=ABCMeta):
                  other_party_place, message=""):
         super().__init__(account, operation_date, effective_date, value,
                          description, amount_remaining, message)
-        self.other_party_name = other_party_name
+        self.other_party_name = Entity(other_party_name)
         self.other_party_place = other_party_place
 
     def get_other_party(self):
@@ -56,19 +55,26 @@ class AccountOp(AxaOp, metaclass=ABCMeta):
         super().__init__(account, operation_date, effective_date, value,
                          description, amount_remaining, message)
 
-        self.other_party_account = other_party_account
-        self.other_party_name = other_party_name
+        self.other_party = Account(iban=other_party_account,
+                                   name=other_party_name)
 
     def get_other_party(self):
-        return Account(iban=self.other_party_account,
-                       name=self.other_party_name)
+        return self.other_party
 
 
 class Transfer(AccountOp):
     pass
 
 
-class Debit(AccountOp):
+class PossiblyWithinOperation(AccountOp):
+    def get_other_party(self):
+        other = super().get_other_party()
+        if isinstance(other, Account) and other.name == "":
+            return self.account.bank
+        return other
+
+
+class Debit(PossiblyWithinOperation):
     """Like fiscal domiciliation"""
     pass
 
@@ -81,8 +87,9 @@ class VisaDebit(Debit):
     pass
 
 
-class Fee(AccountOp):
-    pass
+class Fee(PossiblyWithinOperation):
+    def get_other_party(self):
+        return self.account.bank
 
 
 class AxaParser(object):
@@ -140,7 +147,7 @@ class AxaParser(object):
         elif op_str.type.startswith("Contribution"):
             factory = Fee
             other_is_account = True
-        elif op_str == "Capitalisation":
+        elif op_str.type == "Capitalisation":
             factory = Fee  # Weird
             other_is_account = True
         else:
@@ -173,7 +180,6 @@ class AxaParser(object):
         with open(fpath, "r", encoding=encoding) as hdl:
             account = self._parse_general_header(hdl, account_name)
             header_line = hdl.readline().strip()  # skip csv header
-            print("Header: '{}'".format(header_line))
             curr_line = ""
             for i, line in enumerate(hdl):
                 if line_start.match(line):

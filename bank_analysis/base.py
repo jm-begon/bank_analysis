@@ -41,9 +41,27 @@ class Operation(object, metaclass=ABCMeta):
         pass
 
 
-class Bank(object):
+class Entity(object):
+    def __init__(self, name):
+        self._name = name
+
+    @property
+    def name(self):
+        return self._name
+
+    def __eq__(self, other):
+        return isinstance(other, Entity) and self.name == other.name
+
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__, self.name)
+
+    def __hash__(self):
+        return hash(repr(self))
+
+
+class Bank(Entity):
     def __init__(self, name, bic):
-        self.name = name
+        super().__init__(name)
         self.bic = bic
 
     def __repr__(self):
@@ -53,16 +71,24 @@ class Bank(object):
                          bic=repr(self.bic))
 
     def __eq__(self, other):
-        return isinstance(other, Bank) and  other.name == self.name and \
+        return isinstance(other, Bank) and other.name == self.name and \
                self.bic == other.bic
 
+    def __hash__(self):
+        return super().__hash__()
 
-class Account(object):
+
+class Account(Entity):
     def __init__(self, iban, bank=None, name="n/a", type="n/a"):
+        super().__init__(name)
         self.iban = iban
         self.bank = bank
-        self.name = name
         self.type = type
+
+    @property
+    def name(self):
+        tmp = super().name
+        return self.iban if tmp == "n/a" else tmp
 
     def __repr__(self):
         return "{cls}(iban={iban}, bank={bank}, name={name}, type={type})" \
@@ -89,8 +115,8 @@ class Account(object):
         return isinstance(other, Account) and \
                self.iban.replace(" ", "") == other.iban.replace(" ", "")
 
-    def __hash__(self):
-        return hash(repr(self))
+    def __hash__(self):  # Why is it not inherited ?
+        return super().__hash__()
 
 
 class Historic(object):

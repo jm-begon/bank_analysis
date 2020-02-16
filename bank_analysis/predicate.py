@@ -1,7 +1,5 @@
-import os
 from abc import ABCMeta, abstractmethod
 
-from bank_analysis.axa import Payment
 from bank_analysis.base import Account, Entity
 
 
@@ -27,6 +25,35 @@ class Predicate(object, metaclass=ABCMeta):
 
     def __call__(self, operation):
         return self.fall_under_label(operation)
+
+
+class FalsePredicate(Predicate):
+    def fall_under_label(self, operation):
+        return False
+
+
+class OrPredicate(Predicate):
+    def __init__(self, label=None, predicates=None):
+        super().__init__(label)
+        if predicates is None:
+            predicates = []
+        self.predicates = predicates
+
+    def fall_under_label(self, operation):
+        for predicate in self.predicates:
+            if predicate(operation):
+                return True
+        return False
+
+
+class MoneyIn(Predicate):
+    def fall_under_label(self, operation):
+        return operation.value > 0
+
+
+class MoneyOut(Predicate):
+    def fall_under_label(self, operation):
+        return operation.value < 0
 
 
 class EntityPredicate(Predicate):
@@ -66,110 +93,44 @@ class KnownAccount(Predicate):
 
 
 # ============================================================================ #
-class TreePologyNode(object, metaclass=ABCMeta):
-    def __init__(self):
-        self.money_in = 0
-        self.money_out = 0
-        self.n_operations = 0
+class Treepology(OrPredicate):
+    @classmethod
+    def predicate_to_node(cls, predicate):
+        if not isinstance(predicate, Treepology):
+            return Treepology(predicate.label, [predicate])
+        return predicate
+
+    def __init__(self, label=None, predicates=None):
+        if predicates is None:
+            predicates = []
+        super().__init__(label, [self.__class__.predicate_to_node(x)
+                                 for x in predicates])
 
     @property
-    def label(self):
-        return "n/a"
+    def children(self):
+        return self.predicates
 
-    def _do_add_op(self, operation):
-        if operation.value > 0:
-            self.money_in += operation.value
-        else:
-            self.money_out += operation.value
-        self.n_operations += 1
+    def append(self, predicate):
+        self.predicates.append(self.__class__.predicate_to_node(predicate))
 
-    @abstractmethod
-    def add_operation(self, operation):
-        pass
-
-    def tree_view(self, depth=0, max_depth=1000, prefix=""):
-        if depth >= max_depth:
-            return ""
-        return "{}{}: {:.2f} - {:.2f} = {:.2f} ({:d} operation(s))" \
-               "".format(prefix, self.label, self.money_in, -self.money_out,
-                         self.money_in + self.money_out, self.n_operations)
-
-
-class EntityMatchingNode(TreePologyNode):
-    def __init__(self, label="Total"):
-        super().__init__()
-        self._label = label
-        self.entity_node_dict = {}
-
-    def add_operation(self, operation):
-        self._do_add_op(operation)
-        entity = operation.get_other_party()
-        if entity is None or entity.name == "":
-            print(operation)
-        entity_node = self.entity_node_dict.get(entity)
-        if entity_node is None:
-            entity_node = TreePologyLeaf(EntityPredicate(entity))
-            self.entity_node_dict[entity] = entity_node
-        entity_node.add_operation(operation)
-        return True
-
-    def __len__(self):
-        return len(self.entity_node_dict)
-
-    @property
-    def label(self):
-        return self._label
-
-    def tree_view(self, depth=0, max_depth=1000, prefix=""):
-        s = [super().tree_view(depth, max_depth, prefix)]
-        for child in self.entity_node_dict.values():
-            tmp = child.tree_view(depth + 1, max_depth, prefix=prefix + " " * 2)
-            if len(tmp) > 0:
-                s.append(tmp)
-        return os.linesep.join(s)
-
-
-class TreePologyLeaf(TreePologyNode):
-    def __init__(self, predicate):
-        super().__init__()
-        self.predicate = predicate
-        self.operations = []
-
-    @property
-    def label(self):
-        return self.predicate.label
-
-    def add_operation(self, operation):
-        if self.predicate(operation):
-            self._do_add_op(operation)
-            self.operations.append(operation)
-            return True
-        return False
-
-
-class TreePology(TreePologyNode):
-    def __init__(self, label, *trees):
-        super().__init__()
-        self.children = [TreePologyLeaf(x) if isinstance(x, Predicate) else x
-                         for x in trees]
-        self._label = label
-
-    @property
-    def label(self):
-        return self._label
-
-    def add_operation(self, operation):
-        for i, child in enumerate(self.children):
-            if child.add_operation(operation):
-                self._do_add_op(operation)
-                return True
-        return False
-
-    def tree_view(self, depth=0, max_depth=1000, prefix=""):
-        s = [super().tree_view(depth, max_depth, prefix)]
+    def tree_to_dict(self, d=None):
+        d = {} if d is None else d
+        d[self.label] = self
         for child in self.children:
-            tmp = child.tree_view(depth+1, max_depth, prefix=prefix+" "*2)
-            if len(tmp) > 0:
-                s.append(tmp)
-        return os.linesep.join(s)
+            child.tree_to_dict(d)
+        return d
+
+
+class EntityMatcher(Predicate):
+    def __init__(self, label=None):
+        super().__init__(label)
+        self.known_entities = {}
+
+    def fall_under_label(self, operation):
+        entity = operation.get_other_party()
+        p = self.known_entities.get(entity)
+        if p is None:
+            p = EntityPredicate(entity)
+            self.known_entities[entity] = p
+        return p(entity)  # Which should always be True
 

@@ -13,7 +13,7 @@ import os
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
 
-from bank_analysis.predicate import Default, TreePologyLeaf, EntityMatchingNode
+from bank_analysis.predicate import Default, TreePologyLeaf, EntityMatcher
 from .base import Account
 
 
@@ -107,7 +107,7 @@ class HierarchicalAnalysis(Query):
         accounts = set()
         oldest, latest = historic.period_covered()
 
-        unknown = EntityMatchingNode()
+        unknown = EntityMatcher()
         for operation in historic:
             if not self.tree.add_operation(operation):
                 unknown.add_operation(operation)

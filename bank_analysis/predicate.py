@@ -92,45 +92,47 @@ class KnownAccount(Predicate):
         return operation.get_other_party == self.account
 
 
-# ============================================================================ #
-class Treepology(OrPredicate):
-    @classmethod
-    def predicate_to_node(cls, predicate):
-        if not isinstance(predicate, Treepology):
-            return Treepology(predicate.label, [predicate])
-        return predicate
-
-    def __init__(self, label=None, predicates=None):
-        if predicates is None:
-            predicates = []
-        super().__init__(label, [self.__class__.predicate_to_node(x)
-                                 for x in predicates])
-
-    @property
-    def children(self):
-        return self.predicates
-
-    def append(self, predicate):
-        self.predicates.append(self.__class__.predicate_to_node(predicate))
-
-    def tree_to_dict(self, d=None):
-        d = {} if d is None else d
-        d[self.label] = self
-        for child in self.children:
-            child.tree_to_dict(d)
-        return d
-
-
-class EntityMatcher(Predicate):
-    def __init__(self, label=None):
-        super().__init__(label)
-        self.known_entities = {}
-
-    def fall_under_label(self, operation):
-        entity = operation.get_other_party()
-        p = self.known_entities.get(entity)
-        if p is None:
-            p = EntityPredicate(entity)
-            self.known_entities[entity] = p
-        return p(entity)  # Which should always be True
-
+# # ============================================================================ #
+# class Treepology(OrPredicate):
+#     @classmethod
+#     def predicate_to_node(cls, predicate):
+#         if not isinstance(predicate, Treepology):
+#             t = Treepology(predicate.label)
+#             t.predicates.append(predicate)
+#             return t
+#         return predicate
+#
+#     def __init__(self, label=None, predicates=None):
+#         if predicates is None:
+#             predicates = []
+#         super().__init__(label, [self.__class__.predicate_to_node(x)
+#                                  for x in predicates])
+#
+#     @property
+#     def children(self):
+#         return self.predicates
+#
+#     def append(self, predicate):
+#         self.predicates.append(self.__class__.predicate_to_node(predicate))
+#
+#     def tree_to_dict(self, d=None):
+#         d = {} if d is None else d
+#         d[self.label] = self
+#         for child in self.children:
+#             child.tree_to_dict(d)
+#         return d
+#
+#
+# class EntityMatcher(Predicate):
+#     def __init__(self, label=None):
+#         super().__init__(label)
+#         self.known_entities = {}
+#
+#     def fall_under_label(self, operation):
+#         entity = operation.get_other_party()
+#         p = self.known_entities.get(entity)
+#         if p is None:
+#             p = EntityPredicate(entity)
+#             self.known_entities[entity] = p
+#         return p(entity)  # Which should always be True
+#

@@ -48,6 +48,7 @@ class Withdrawal(NotAccountOp):
     pass
 
 
+
 class AccountOp(AxaOp, metaclass=ABCMeta):
     def __init__(self, account, operation_date, effective_date, value,
                  description, amount_remaining, other_party_account,
@@ -131,7 +132,8 @@ class AxaParser(object):
         elif op_str.type.startswith("Retrait"):
             factory = Withdrawal
             other_is_not_account = True
-        elif op_str.type.startswith("Virement"):
+        elif op_str.type.startswith("Virement") or \
+            op_str.type == "Epargne Automatique":
             factory = Transfer
             other_is_account = True
         elif op_str.type == "Ordre permanent":
@@ -144,7 +146,8 @@ class AxaParser(object):
             else:
                 factory = Debit
             other_is_account = True
-        elif op_str.type.startswith("Contribution"):
+        elif op_str.type.startswith("Contribution") or \
+            op_str.type ==  "Tarification: ATM":
             factory = Fee
             other_is_account = True
         elif op_str.type == "Capitalisation":
@@ -190,5 +193,10 @@ class AxaParser(object):
                     curr_line = line
                 else:
                     curr_line += line
+                last_line = curr_line
+            if len(curr_line) > 0:
+                ops.append(self._parse_operation(curr_line.strip(),
+                                                 "last line",
+                                                 account))
 
         return Historic(ops)

@@ -5,6 +5,7 @@ import copy
 from dateutil.parser import parse as auto_parse_date
 
 
+
 class Operation(object, metaclass=ABCMeta):
     @classmethod
     def parse_date(cls, date):
@@ -39,6 +40,15 @@ class Operation(object, metaclass=ABCMeta):
 
     def get_other_party(self):
         pass
+
+    def __eq__(self, other):
+        return isinstance(other, Operation) and \
+               self.account == other.account and \
+               self.op_date == other.op_date and \
+               self.effective_date == other.effective_date and \
+               (self.value - other.value)**2 < 1e-20 and \
+               self.value == other.value and \
+               self.description == other.description
 
 
 class Entity(object):
@@ -132,11 +142,41 @@ class Historic(object):
             return new_historic
         return self.operations[item]
 
+    def __iter__(self):
+        return iter(self.operations)
+
+    def __len__(self):
+        return len(self.operations)
+
     def merge(self, other_historic):
-        # TODO filter out redoundancy
         new_historic = copy.copy(self)
-        new_historic.operations = copy.copy(self.operations)
-        new_historic.operations.extend(other_historic.operations)
+        operations = []
+        i = j = 0
+        while i < len(self) and j < len(other_historic):
+            op1 = self[i]
+            op2 = other_historic[j]
+            if op1.op_date == op2.op_date:
+                if op1 == op2:
+                    # Can only one duplicate per pair of historics
+                    operations.append(op1)
+                    i += 1
+                    j += 1
+                else:
+                    operations.append(op1)
+                    i += 1
+            elif op1.op_date <= op2.op_date:
+                operations.append(op1)
+                i += 1
+            else:
+                operations.append(op2)
+                j += 1
+
+        operations.extend(self[i:])
+        operations.extend(other_historic[j:])
+
+
+        new_historic.operations = operations
+
         return new_historic
 
     def period_covered(self):

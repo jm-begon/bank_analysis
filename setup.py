@@ -35,5 +35,5 @@ if __name__ == '__main__':
           classifiers=CLASSIFIERS,
           platforms='any',
           install_requires=[],
-          packages=['bank_analysis'])
+          packages=['bank_analysis', "bank_analysis/formating"])
 

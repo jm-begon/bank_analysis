@@ -26,23 +26,13 @@ class Predicate(object, metaclass=ABCMeta):
     def __call__(self, operation):
         return self.fall_under_label(operation)
 
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__,
+                               repr(self.label))
+
 
 class FalsePredicate(Predicate):
     def fall_under_label(self, operation):
-        return False
-
-
-class OrPredicate(Predicate):
-    def __init__(self, label=None, predicates=None):
-        super().__init__(label)
-        if predicates is None:
-            predicates = []
-        self.predicates = predicates
-
-    def fall_under_label(self, operation):
-        for predicate in self.predicates:
-            if predicate(operation):
-                return True
         return False
 
 
@@ -82,6 +72,11 @@ class KnownOtherParty(Predicate):
     def fall_under_label(self, operation):
         return self.from_operation_to_name(operation) == self.other_party
 
+    def __repr__(self):
+        return "{}({}, {})".format(self.__class__.__name__,
+                                   repr(self.other_party.name),
+                                   repr(self.label))
+
 
 class KnownAccount(Predicate):
     def __init__(self, account):
@@ -89,8 +84,36 @@ class KnownAccount(Predicate):
         self.account = account
 
     def fall_under_label(self, operation):
-        return operation.get_other_party == self.account
 
+        return operation.get_other_party() == self.account
+
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__,
+                               repr(self.account))
+
+
+class OrPredicate(Predicate):
+    def __init__(self, label=None, predicates=None):
+        super().__init__(label)
+        if predicates is None:
+            predicates = []
+        self.predicates = predicates
+
+    def fall_under_label(self, operation):
+        for predicate in self.predicates:
+            if predicate(operation):
+                # print(predicate);print(operation);print()
+                return True
+        return False
+
+    def __iter__(self):
+        for p in self.predicates:
+            yield p
+
+    def __repr__(self):
+        return "{}({}, {})".format(self.__class__.__name__,
+                                   repr(self.label),
+                                   repr(self.predicates))
 
 # # ============================================================================ #
 # class Treepology(OrPredicate):

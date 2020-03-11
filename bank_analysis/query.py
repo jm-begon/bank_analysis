@@ -15,7 +15,9 @@ from collections import defaultdict
 
 from datetime import datetime, timedelta
 
-from bank_analysis.predicate import Default, OrPredicate
+from bank_analysis.formating.util import format_tree_view, \
+    format_tree_view_as_str
+from bank_analysis.predicate import Default, OrPredicate, MoneyOut
 from bank_analysis.treepology import Tree, Treepology
 from .base import Account
 
@@ -191,12 +193,15 @@ class HierarchicalAnalysis(Query):
             unknown_str = ", ".join([repr(o) for o in unknown])
             unknown_str += os.linesep
 
+        def gen_op_info(treepology):
+            for label, ops in treepology.prefix_walk():
+                v = "{:.2f} ({} operations)".format(sum(op.value for op in ops),
+                                                    len(ops))
+                yield label, v
 
-        tree_str = "\n".join(["{}: {} ({} operations)"
-                              "".format(".".join(label),
-                                        sum(op.value for op in ops),
-                                        len(ops))
-                              for label, ops in self.tree.tree])
+
+        l = list(format_tree_view_as_str(gen_op_info(self.tree)))
+        tree_str = "\n".join(l)
 
         # tree_str = self.tree.tree_view(max_depth=self.max_depth)
         return """
@@ -215,5 +220,72 @@ Known entities
 {}
 """.format(oldest, latest, ", ".join(accounts),
            tree_str,
-           len(unknown),
+           self.tree.unknown_size(),
            unknown_str)
+
+
+class MonthlySpendingQuery(Query):
+    def __init__(self, treepology, max_depth=1000, give_unknown=False):
+        self.treepology = treepology
+        self.max_depth = max_depth
+        self.give_unknown = give_unknown
+
+    def format_level(self, label, ops):
+        return "{:.2f} ({} operations)".format(sum(op.value for op in ops),
+                                               len(ops))
+
+    def gen_op_info(self, generator):
+        for label, ops in generator:
+            v = "{:.2f} ({} operations)".format(sum(op.value for op in ops),
+                                                len(ops))
+            yield label, self.format_level(label, ops)
+
+    def do_query(self, historic):
+        oldest, latest = historic.period_covered()
+
+        for operation in historic:
+            self.treepology.add_operation(operation)
+
+        unknowns = self.treepology.unknowns
+        l = list(format_tree_view_as_str(self.gen_op_info(unknowns.prefix_walk())))
+        if self.give_unknown:
+            unknown_str = "\n".join(l)
+        else:
+            unknown_str = l[0]
+
+
+        l = list(format_tree_view_as_str(self.gen_op_info(self.treepology.tree.prefix_walk())))
+        tree_str = "\n".join(l)
+
+        return """
+Period: {} - {}
+
+Known entities
+-----------------------------
+{}
+
+Unknown entities
+-----------------------------
+{}
+""".format(oldest, latest, tree_str, unknown_str)
+
+    def query(self, historic):
+        historic = historic.filter(MoneyOut())
+
+        # Suppose only one account
+        oldest, latest = historic.period_covered()
+        reports = []
+        for start, end in list_months(oldest, latest):
+            self.treepology.reset()
+            s = self.do_query(historic.clip(start, end))
+            reports.append(s)
+
+        self.treepology.reset()
+        reports.append(self.do_query(historic))
+
+        return """
+====================================
+Hierarchical Spending Analysis query
+====================================
+{}
+        """.format("\n\n".join(reports))
